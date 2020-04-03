@@ -1,0 +1,5 @@
+tensorflow-gpu==1.14.0
+tensorpack==0.9.8
+scikit-learn
+git+https://github.com/waleedka/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI
+scikit-image
