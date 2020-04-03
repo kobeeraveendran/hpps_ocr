@@ -305,7 +305,7 @@ def detection(img_path, detection_model, recognition_model, label_dict, it_is_vi
         # else:
         #     vis_image = draw_annotation(vis_image, pts, ''.join(results))
 
-    retval = (words, confidences, img_path)
+    retval = (' '.join(words), ' '.join([str(c) for c in confidences]), img_path)
     print(retval)
 
     return vis_image, retval
