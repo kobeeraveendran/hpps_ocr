@@ -9,7 +9,6 @@ from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 import textwrap
 import cv2
-import tensorflow as tf
 
 from util import *
 

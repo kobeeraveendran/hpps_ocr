@@ -9,8 +9,8 @@ import tarfile
 import copy
 import sys
 
-#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '4'
 
 import textwrap
@@ -69,10 +69,10 @@ def init_ocr_model():
     # recognition_pb = './checkpoint/text_recognition_5435.pb' # 
     recognition_pb = './checkpoint/text_recognition.pb'
     # os.environ["CUDA_VISIBLE_DEVICES"] = "9"
-    #with tf.device('/cpu:0'):
-    with tf.device('/gpu:0'):
+    with tf.device('/cpu:0'):
+    #with tf.device('/gpu:0'):
         tf_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True),#, visible_device_list="9"),
-                                   allow_soft_placement=True)
+                                   allow_soft_placement=True, log_device_placement = True)
 
         #tf_config = tf.ConfigProto(device_count = {'GPU': 0}, allow_soft_placement=True, log_device_placement = True)
 
@@ -81,59 +81,6 @@ def init_ocr_model():
     
     label_dict = np.load('./reverse_label_dict_with_rects.npy', allow_pickle = True)[()] # reverse_label_dict_with_rects.npy  reverse_label_dict
     return detection_model, recognition_model, label_dict 
-
-
-'''
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def is_video(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in VIDEO_EXTENSIONS
-'''
-'''
-##OCR TEST
-@app.route('/', methods=['GET', 'POST'])
-def ocr_upload_file():
-    if request.method == 'POST':
-        # check if the post request has the file part
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['file']
-        # if user does not select file, browser also
-        # submit a empty part without filename
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-
-        filename = file.filename
-        if file and allowed_file(filename):
-            if is_video(filename):
-                file.save(os.path.join(app.config['VIDEO_FOLDER'], filename))
-
-                return redirect(url_for('predict_ocr_video',
-                                        filename=filename))
-            else:
-                filename = secure_filename(filename)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                # fix_orientation(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                return redirect(url_for('predict_ocr_image',
-                                        filename=filename))
-    #
-    # 
-    # <!doctype html>
-    # <title>Upload new File for OCR</title>
-    # <h1>Upload new File for OCR</h1>
-    # <form method=post enctype=multipart/form-data>
-    #   <input type=file name=file>
-    #   <input type=submit value=Upload>
-    # </form>
-    # 
-    return render_template("ocr.html")
-'''
-
 
 #@app.route('/image_ocr/<filename>')
 def predict_ocr_image(img_dir, filename, ocr_detection_model, ocr_recognition_model, ocr_label_dict):
@@ -146,26 +93,6 @@ def predict_ocr_image(img_dir, filename, ocr_detection_model, ocr_recognition_mo
     #return send_from_directory(app.config['IMAGE_FOLDER'], filename)
 
     return output
-
-'''
-#@app.route('/video_ocr/<filename>')
-def predict_ocr_video(filename):
-    def stream_data():
-        cap = cv2.VideoCapture(os.path.join(app.config['VIDEO_FOLDER'], filename))
-
-        while True:
-            ret, frame = cap.read()
-            print(type(frame))
-            if not ret:
-                print('ret is False')
-                break
-            viz_image = detection_video(frame, ocr_detection_model, ocr_recognition_model, ocr_label_dict)
-            viz_image = cv2.imencode('.jpg', viz_image)[1].tobytes()
-            yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + viz_image + b'\r\n')
-
-    return Response(stream_data(), mimetype='multipart/x-mixed-replace; boundary=frame')#redirect(out_path)
-'''
 
 #@app.route("/classify", methods=["POST"])
 def classify():
@@ -304,62 +231,11 @@ def detection(img_path, detection_model, recognition_model, label_dict, it_is_vi
         #     vis_image = draw_annotation(vis_image, pts, ''.join(results), False)
         # else:
         #     vis_image = draw_annotation(vis_image, pts, ''.join(results))
-
+    print(' '.join(words))
     retval = (' '.join(words), ' '.join([str(c) for c in confidences]), img_path)
-    print(retval)
+    #print(retval)
 
     return vis_image, retval
-
-'''
-def detection_video(bgr_image, detection_model, recognition_model, label_dict):
-    print(bgr_image.shape)
-    vis_image = copy.deepcopy(bgr_image)
-    rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
-
-    r_boxes, polygons, scores = detection_model.predict(bgr_image)
-
-    for r_box, polygon, score in zip(r_boxes, polygons, scores):
-        mask, bbox = mask_with_points(polygon, vis_image.shape[0], vis_image.shape[1])
-        masked_image = rgb_image * mask
-        masked_image = np.uint8(masked_image)
-        cropped_image = masked_image[max(0, bbox[0]):min(bbox[2], masked_image.shape[0]), max(0, bbox[1]):min(bbox[3], masked_image.shape[1]), :]
-
-        height, width = cropped_image.shape[:2]
-        test_size = 299
-        if height>=width:
-            scale = test_size/height
-            resized_image = cv2.resize(cropped_image, (0,0), fx=scale, fy=scale)
-            print(resized_image.shape)
-            left_bordersize = (test_size - resized_image.shape[1]) // 2
-            right_bordersize = test_size - resized_image.shape[1] - left_bordersize
-            image_padded = cv2.copyMakeBorder(resized_image, top=0, bottom=0, left=left_bordersize, right=right_bordersize, borderType= cv2.BORDER_CONSTANT, value=[0,0,0] )
-            image_padded = np.float32(image_padded)/255.
-        else:
-            scale = test_size/width
-            resized_image = cv2.resize(cropped_image, (0,0), fx=scale, fy=scale)
-            print(resized_image.shape)
-            top_bordersize = (test_size - resized_image.shape[0]) // 2
-            bottom_bordersize = test_size - resized_image.shape[0] - top_bordersize
-            image_padded = cv2.copyMakeBorder(resized_image, top=top_bordersize, bottom=bottom_bordersize, left=0, right=0, borderType= cv2.BORDER_CONSTANT, value=[0,0,0] )
-            image_padded = np.float32(image_padded)/255.
-
-        image_padded = np.expand_dims(image_padded, 0)
-        print(image_padded.shape)
-
-        results, probs = recognition_model.predict(image_padded, label_dict, EOS='EOS')
-        #print(''.join(results))
-        print(probs)
-
-        ccw_polygon = orient(Polygon(polygon.tolist()).simplify(5, preserve_topology=True), sign=1.0)
-        pts = list(ccw_polygon.exterior.coords)[:-1]
-
-        if height >= width:
-            vis_image = draw_annotation(vis_image, pts, ''.join(results), False)
-        else:
-            vis_image = draw_annotation(vis_image, pts, ''.join(results))
-
-    return vis_image
-'''
 
 import argparse
 
@@ -372,8 +248,21 @@ def update(db, pipeline_output):
     c = conn.cursor()
 
     # update cropped images to include OCR output
-    c.executemany('UPDATE PipelineResults SET ocr_results = ?, confidence = ? WHERE crop_path = ? ORDER ROWID LIMIT 1;', pipeline_output)
-    conn.commit()
+    #print(pipeline_output)
+    
+    for output in pipeline_output:
+
+        #c.execute("SELECT * FROM crop_path WHERE crop_path = {}".format(output[2]))
+        c.execute(f'Update PipelineResults set ocr_results = "{output[0]}", confidence = "{output[1]}" where crop_path = "{output[2]}"')
+        #c.execute('Update PipelineResults set ocr_results = (?), confidence = (?) where crop_path = (?)'.format(), output)
+        conn.commit()
+    
+    #output = pipeline_output[0]
+    #print('INPUT IMAGE PATH: ', output[2])
+    #c.execute(f'Update PipelineResults set ocr_results = "{output[0]}", confidence = "{output[1]}" where crop_path = "{output[2]}"')
+
+    #c.executemany('UPDATE PipelineResults SET ocr_results = (?), confidence = (?) WHERE crop_path = ?', pipeline_output)
+    #conn.commit()
 
     # close out db
     c.close()
@@ -402,4 +291,4 @@ if __name__ == '__main__':
     for filename in os.listdir(args.img_dir):
         db_output.append(predict_ocr_image(args.img_dir, filename, ocr_detection_model, ocr_recognition_model, ocr_label_dict))
 
-    update(args.db, db_output)
+    #update(args.db, db_output)
