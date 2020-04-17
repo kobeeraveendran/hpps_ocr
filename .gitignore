@@ -16,3 +16,6 @@ dist1/
 *.jpg
 *.jpeg
 *.JPG
+build2/
+dist2/
+output_demo/
