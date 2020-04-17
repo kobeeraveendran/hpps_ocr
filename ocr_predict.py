@@ -71,10 +71,10 @@ def init_ocr_model():
     # os.environ["CUDA_VISIBLE_DEVICES"] = "9"
     with tf.device('/cpu:0'):
     #with tf.device('/gpu:0'):
-        tf_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True),#, visible_device_list="9"),
-                                   allow_soft_placement=True, log_device_placement = True)
+        #tf_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True),#, visible_device_list="9"),
+        #                           allow_soft_placement=True, log_device_placement = True)
 
-        #tf_config = tf.ConfigProto(device_count = {'GPU': 0}, allow_soft_placement=True, log_device_placement = True)
+        tf_config = tf.ConfigProto(device_count = {'GPU': 0}, allow_soft_placement=True)
 
         detection_model = TextDetection(detection_pb, tf_config, max_size=1600)
         recognition_model = TextRecognition(recognition_pb, seq_len=27, config=tf_config)
@@ -94,24 +94,9 @@ def predict_ocr_image(img_dir, filename, ocr_detection_model, ocr_recognition_mo
 
     return output
 
-#@app.route("/classify", methods=["POST"])
-def classify():
-    predictions = detection(request.data)
-    print(predictions)
-    #return jsonify(predictions=predictions)
-    return predictions
-
-
-
-#@app.errorhandler(404)
-def not_found(error):
-    return make_response(jsonify({'error': 'Not found'}), 404)
-
-
 from functools import reduce
 import operator
 import math
-
 
 def order_points(pts):
     def centeroidpython(pts):
@@ -221,6 +206,8 @@ def detection(img_path, detection_model, recognition_model, label_dict, it_is_vi
         #print(''.join(results))
         #print(probs)
 
+        results = ''.join(results).replace('#', '')
+
         words.append(''.join(results))
         confidences.append(sum(probs) / len(probs))
 
@@ -231,13 +218,14 @@ def detection(img_path, detection_model, recognition_model, label_dict, it_is_vi
         #     vis_image = draw_annotation(vis_image, pts, ''.join(results), False)
         # else:
         #     vis_image = draw_annotation(vis_image, pts, ''.join(results))
-    print(' '.join(words))
+    #print(' '.join(words))
     retval = (' '.join(words), ' '.join([str(c) for c in confidences]), img_path)
     #print(retval)
 
     return vis_image, retval
 
-import argparse
+from argparse import ArgumentParser
+from time import time
 
 from sqlite3 import connect
 
@@ -267,12 +255,13 @@ def update(db, pipeline_output):
     # close out db
     c.close()
 
+import logging
 
 if __name__ == '__main__':
     # os.environ["TF_ENABLE_CONTROL_FLOW_V2"] = "0"
     #app.run(host='0.0.0.0', debug=True)
 
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
 
     parser.add_argument('--img_dir', type = str, help = 'Path to directory of images.', default = './image/')
     parser.add_argument('--db', type = str, help = 'Path to SQLite database file.')
@@ -281,14 +270,28 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-
     ocr_detection_model, ocr_recognition_model, ocr_label_dict = init_ocr_model()
 
     os.makedirs('output', exist_ok = True)
 
     db_output = []
+    os.makedirs('logs', exist_ok = True)
+    logging.basicConfig(filename = "logs/ocr.log", level = logging.DEBUG, format = "%(levelname)s: %(message)s")
+
+    logging.info("Started processing current batch...")
+    start = time()
 
     for filename in os.listdir(args.img_dir):
-        db_output.append(predict_ocr_image(args.img_dir, filename, ocr_detection_model, ocr_recognition_model, ocr_label_dict))
+        try:
+            ocr_output = predict_ocr_image(args.img_dir, filename, ocr_detection_model, ocr_recognition_model, ocr_label_dict)
+            db_output.append(ocr_output)
+            logging.info("Successfully processed: {}. Results: {}".format(filename, ocr_output[0]))
+        
+        except:
+            logging.error("Something went wrong when processing the file '{}'. Ensure you've supplied the proper filepath or that the file is an image and try again.".format(filename))
 
-    #update(args.db, db_output)
+    duration = time() - start
+
+    logging.info("Finished processing current image set. Time taken: {0:.2f}s".format(duration))
+
+    update(args.db, db_output)

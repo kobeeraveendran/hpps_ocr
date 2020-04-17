@@ -4,3 +4,15 @@ static/
 video/
 checkpoint/
 uploads/
+build/
+dist/
+*.spec
+sample/
+build/
+dist/
+build1/
+dist1/
+*.JPEG
+*.jpg
+*.jpeg
+*.JPG
